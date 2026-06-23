@@ -1,0 +1,38 @@
+# Python (pc-receiver)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+*.sqlite3
+
+# Données runtime du serveur
+pc-receiver/data/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+*.apk
+*.aab
+
+# iOS (projet généré par XcodeGen)
+ios/SoundCam.xcodeproj/
+ios/SoundCam/App/Info.plist
+ios/build/
+ios/DerivedData/
+
+# Modèle TFLite non versionné (voir android/app/src/main/assets/README.md)
+android/app/src/main/assets/*.tflite
+
+# Divers
+.DS_Store
+*.log
+.idea/
+*.iml
+.vscode/
