@@ -85,6 +85,22 @@ class CameraConnection:
         }
 
 
+class BrowserSignalSession:
+    """Session de signaling d'un navigateur (récepteur WebRTC du dashboard).
+
+    Le navigateur du dashboard est le pair WebRTC qui affiche le flux ; le PC ne fait
+    que relayer offre/réponse/ICE. Les messages destinés à ce navigateur sont déposés
+    dans une file, drainée par le thread WebSocket qui possède la socket ``/signal``.
+    """
+
+    def __init__(self):
+        self.outgoing: "queue.Queue[dict[str, Any]]" = queue.Queue()
+        self.live_sessions: set[str] = set()  # session_ids ouverts par ce navigateur
+
+    def enqueue(self, message: dict[str, Any]) -> None:
+        self.outgoing.put(message)
+
+
 class CameraHub:
     def __init__(self, offline_after_s: float = 6.0, ack_timeout_s: float = 5.0):
         self._cameras: dict[str, CameraConnection] = {}
@@ -93,6 +109,9 @@ class CameraHub:
         self.ack_timeout_s = ack_timeout_s
         # Callback(event_type, device_id, detail) appelé pour journaliser (EF-19).
         self.on_event: Callable[[str, str | None, str | None], None] | None = None
+        # Sessions de diffusion en direct : session_id -> {camera, browser}.
+        self._live: dict[str, dict[str, Any]] = {}
+        self._live_lock = threading.Lock()
 
     def add(self, conn: CameraConnection) -> None:
         with self._lock:
@@ -162,13 +181,47 @@ class CameraHub:
             "device_id": conn.device_id,
         }
 
+    # --- diffusion en direct (relais de signaling WebRTC) --------------------
+
+    def live_open(self, session_id: str, camera: CameraConnection,
+                  browser: BrowserSignalSession) -> None:
+        with self._live_lock:
+            self._live[session_id] = {"camera": camera, "browser": browser}
+        browser.live_sessions.add(session_id)
+
+    def live_close(self, session_id: str) -> None:
+        with self._live_lock:
+            entry = self._live.pop(session_id, None)
+        if entry:
+            entry["browser"].live_sessions.discard(session_id)
+
+    def route_from_browser(self, session_id: str, msg: dict[str, Any]) -> bool:
+        """Relaie un message de signaling navigateur -> caméra. False si session inconnue."""
+        with self._live_lock:
+            entry = self._live.get(session_id)
+        if not entry:
+            return False
+        entry["camera"].enqueue(msg)
+        return True
+
+    def route_from_camera(self, session_id: str, msg: dict[str, Any]) -> bool:
+        """Relaie un message de signaling caméra -> navigateur. False si session inconnue."""
+        with self._live_lock:
+            entry = self._live.get(session_id)
+        if not entry:
+            return False
+        entry["browser"].enqueue(msg)
+        return True
+
     # --- réception de messages caméra ----------------------------------------
 
     def handle_camera_message(self, conn: CameraConnection, msg: dict[str, Any]) -> None:
         conn.last_seen = time.time()
         mtype = msg.get("type")
 
-        if mtype == protocol.MsgType.STATUS:
+        if mtype in protocol.LIVE_TYPES:
+            self.route_from_camera(msg.get("session_id", ""), msg)
+        elif mtype == protocol.MsgType.STATUS:
             conn.last_status = {
                 "state": msg.get("state", "idle"),
                 "recording": bool(msg.get("recording")),

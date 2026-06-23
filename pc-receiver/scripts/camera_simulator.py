@@ -17,6 +17,7 @@ import argparse
 import io
 import json
 import mimetypes
+import queue
 import threading
 import time
 import urllib.request
@@ -92,7 +93,8 @@ def http_upload(base_url: str, token: str, meta: dict, data: bytes, filename: st
 
 
 class CameraSimulator:
-    def __init__(self, ws_url: str, http_url: str, credential: str, name: str = "Caméra simulée"):
+    def __init__(self, ws_url: str, http_url: str, credential: str, name: str = "Caméra simulée",
+                 live: bool = False):
         self.ws_url = ws_url
         self.http_url = http_url
         # PIN au premier appairage ; remplacé par le token fort renvoyé dans HELLO_ACK.
@@ -103,6 +105,13 @@ class CameraSimulator:
         self.recording_id = None
         self.ws = None
         self._stop = threading.Event()
+        # Diffusion en direct (WebRTC) optionnelle, chargée à la demande.
+        self._live_out: "queue.Queue[dict]" = queue.Queue()
+        self._live_engine = None
+        if live:
+            from sim_live import LiveEngine
+            self._live_engine = LiveEngine(self._live_out.put)
+            print("[sim] Mode live activé (WebRTC, mire de synthèse).")
 
     def _hello(self) -> dict:
         return {
@@ -141,6 +150,12 @@ class CameraSimulator:
             if now - last_status > 2:
                 self.ws.send(json.dumps(self._status()))
                 last_status = now
+            # Draine les messages de signaling live sortants (offre/ICE).
+            try:
+                while True:
+                    self.ws.send(json.dumps(self._live_out.get_nowait()))
+            except queue.Empty:
+                pass
             try:
                 raw = self.ws.receive(timeout=0.2)
             except simple_websocket.ConnectionClosed:
@@ -170,6 +185,12 @@ class CameraSimulator:
             print(f"[sim] ⚙ SET_SETTINGS {{threshold:{msg.get('threshold')}, "
                   f"quality:{msg.get('video_quality')}}}")
             self._ack(msg.get("request_id"), "ok")
+        elif mtype in ("LIVE_REQUEST", "LIVE_ANSWER", "LIVE_ICE", "LIVE_STOP"):
+            if self._live_engine is not None:
+                self._live_engine.handle(msg)
+            elif mtype == "LIVE_REQUEST":
+                # Live non pris en charge par ce simulateur : on refuse proprement.
+                self._live_out.put({"type": "LIVE_STOP", "session_id": msg.get("session_id", "")})
 
     def _ack(self, request_id, result, reason=None):
         if not request_id:
@@ -202,6 +223,8 @@ def main():
     p.add_argument("--token", help="Token d'appairage direct (au lieu du PIN).")
     p.add_argument("--url", help="URL WebSocket directe, ex. ws://127.0.0.1:8766")
     p.add_argument("--upload", help="Fichier vidéo à téléverser après un STOP.")
+    p.add_argument("--live", action="store_true",
+                   help="Active la diffusion en direct WebRTC (mire de synthèse, dev).")
     args = p.parse_args()
 
     if args.url:
@@ -228,7 +251,7 @@ def main():
         with open(args.upload, "rb") as f:
             payload = f.read()
 
-    sim = CameraSimulator(ws_url, http_url, credential)
+    sim = CameraSimulator(ws_url, http_url, credential, live=args.live)
     if not sim.connect():
         return 1
     try:

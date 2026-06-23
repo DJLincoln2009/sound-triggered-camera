@@ -17,6 +17,7 @@ import com.soundcam.camera.audio.SoundDetector
 import com.soundcam.camera.capture.VideoRecorder
 import com.soundcam.camera.data.PendingUploads
 import com.soundcam.camera.data.SettingsRepository
+import com.soundcam.camera.live.LiveStreamer
 import com.soundcam.camera.net.CommandClient
 import com.soundcam.camera.net.Discovery
 import com.soundcam.camera.net.VideoUploader
@@ -52,6 +53,7 @@ class CameraService : LifecycleService(), CommandClient.Callback {
     private lateinit var recorder: VideoRecorder
     private lateinit var discovery: Discovery
     private var client: CommandClient? = null
+    private var live: LiveStreamer? = null
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var cfgDeviceId = ""
@@ -75,6 +77,7 @@ class CameraService : LifecycleService(), CommandClient.Callback {
         recorder = VideoRecorder(applicationContext)
         detector = SoundDetector(applicationContext) { conf, label -> onSoundTrigger(conf, label) }
         discovery = Discovery(applicationContext)
+        live = LiveStreamer(applicationContext, liveSignaling)
 
         createNotificationChannel()
         androidx.core.app.ServiceCompat.startForeground(
@@ -184,6 +187,34 @@ class CameraService : LifecycleService(), CommandClient.Callback {
 
     override fun onDisconnected() {
         ServiceState.update { it.copy(connected = false) }
+    }
+
+    // --- Diffusion en direct (WebRTC, optionnelle) ---------------------------
+
+    /** Pont entre [LiveStreamer] et le canal de commandes pour relayer le signaling. */
+    private val liveSignaling = object : LiveStreamer.Signaling {
+        override fun sendOffer(sessionId: String, sdp: String) =
+            client?.sendLiveOffer(sessionId, sdp) ?: Unit
+        override fun sendIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int) =
+            client?.sendLiveIce(sessionId, candidate, sdpMid, sdpMLineIndex) ?: Unit
+        override fun sendStop(sessionId: String) =
+            client?.sendLiveStop(sessionId) ?: Unit
+    }
+
+    override fun onLiveRequest(sessionId: String) {
+        live?.start(sessionId)
+    }
+
+    override fun onLiveAnswer(sessionId: String, sdp: String) {
+        live?.onAnswer(sessionId, sdp)
+    }
+
+    override fun onLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int) {
+        live?.onRemoteIce(sessionId, candidate, sdpMid, sdpMLineIndex)
+    }
+
+    override fun onLiveStop(sessionId: String) {
+        live?.stop()
     }
 
     // --- Déclenchement sonore (EF-03) ----------------------------------------
@@ -364,6 +395,7 @@ class CameraService : LifecycleService(), CommandClient.Callback {
         detector.stop()
         recorder.unbind()
         discovery.stop()
+        live?.release()
         client?.close()
         ServiceState.update { CameraServiceState(running = false) }
         super.onDestroy()

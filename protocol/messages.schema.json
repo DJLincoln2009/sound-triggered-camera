@@ -112,6 +112,63 @@
         "recording_id": { "type": ["string", "null"] }
       },
       "required": ["type", "request_id", "result"]
+    },
+    {
+      "title": "LIVE_REQUEST",
+      "description": "PC -> camera : demande l'ouverture d'une diffusion en direct WebRTC.",
+      "properties": {
+        "type": { "const": "LIVE_REQUEST" },
+        "session_id": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["type", "session_id"]
+    },
+    {
+      "title": "LIVE_OFFER",
+      "description": "camera -> PC -> navigateur : SDP offer.",
+      "properties": {
+        "type": { "const": "LIVE_OFFER" },
+        "session_id": { "type": "string" },
+        "sdp": { "type": "string" }
+      },
+      "required": ["type", "session_id", "sdp"]
+    },
+    {
+      "title": "LIVE_ANSWER",
+      "description": "navigateur -> PC -> camera : SDP answer.",
+      "properties": {
+        "type": { "const": "LIVE_ANSWER" },
+        "session_id": { "type": "string" },
+        "sdp": { "type": "string" }
+      },
+      "required": ["type", "session_id", "sdp"]
+    },
+    {
+      "title": "LIVE_ICE",
+      "description": "Bidirectionnel : candidat ICE (trickle).",
+      "properties": {
+        "type": { "const": "LIVE_ICE" },
+        "session_id": { "type": "string" },
+        "candidate": {
+          "type": "object",
+          "properties": {
+            "candidate": { "type": "string" },
+            "sdpMid": { "type": ["string", "null"] },
+            "sdpMLineIndex": { "type": "integer" }
+          },
+          "required": ["candidate"]
+        }
+      },
+      "required": ["type", "session_id", "candidate"]
+    },
+    {
+      "title": "LIVE_STOP",
+      "description": "Bidirectionnel : termine la session de diffusion en direct.",
+      "properties": {
+        "type": { "const": "LIVE_STOP" },
+        "session_id": { "type": "string" }
+      },
+      "required": ["type", "session_id"]
     }
   ]
 }

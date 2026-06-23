@@ -89,6 +89,15 @@ select, input[type=text], input[type=time] {
 .hint.ok { color: var(--green); }
 .hint.err { color: var(--red); }
 
+.live-controls { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.live-toggle { display: flex; align-items: center; gap: 8px; color: var(--muted);
+  font-size: 13px; margin-bottom: 12px; cursor: pointer; }
+.live-toggle input { width: auto; }
+.btn-live { background: #7c3aed; }
+.live-header { display: flex; justify-content: space-between; align-items: center; }
+.live-card video { width: 100%; max-height: 60vh; background: #000;
+  border-radius: var(--radius); margin-top: 6px; }
+
 .recent li { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);
   font-size: 14px; }
 .recent .origin { font-size: 11px; padding: 2px 8px; border-radius: 12px; }

@@ -14,6 +14,10 @@ final class CommandClient: NSObject, URLSessionDelegate {
         func onStartRecording(requestId: String, maxDurationS: Double)
         func onStopRecording(requestId: String)
         func onSetSettings(requestId: String, settings: RemoteSettings)
+        func onLiveRequest(sessionId: String)
+        func onLiveAnswer(sessionId: String, sdp: String)
+        func onLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int32)
+        func onLiveStop(sessionId: String)
         func onDisconnected()
     }
 
@@ -95,6 +99,21 @@ final class CommandClient: NSObject, URLSessionDelegate {
             delegate?.onSetSettings(
                 requestId: o["request_id"] as? String ?? "",
                 settings: RemoteSettings(from: o))
+        case Messages.MsgType.liveRequest:
+            delegate?.onLiveRequest(sessionId: o["session_id"] as? String ?? "")
+        case Messages.MsgType.liveAnswer:
+            delegate?.onLiveAnswer(sessionId: o["session_id"] as? String ?? "",
+                                   sdp: o["sdp"] as? String ?? "")
+        case Messages.MsgType.liveIce:
+            if let c = o["candidate"] as? [String: Any] {
+                delegate?.onLiveIce(
+                    sessionId: o["session_id"] as? String ?? "",
+                    candidate: c["candidate"] as? String ?? "",
+                    sdpMid: c["sdpMid"] as? String,
+                    sdpMLineIndex: (c["sdpMLineIndex"] as? NSNumber)?.int32Value ?? 0)
+            }
+        case Messages.MsgType.liveStop:
+            delegate?.onLiveStop(sessionId: o["session_id"] as? String ?? "")
         default:
             break
         }
@@ -126,6 +145,18 @@ final class CommandClient: NSObject, URLSessionDelegate {
 
     func sendSoundTriggered(recordingId: String, confidence: Float, label: String?) {
         send(Messages.soundTriggered(recordingId: recordingId, confidence: confidence, label: label))
+    }
+
+    func sendLiveOffer(sessionId: String, sdp: String) {
+        send(Messages.liveOffer(sessionId: sessionId, sdp: sdp))
+    }
+
+    func sendLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int32) {
+        send(Messages.liveIce(sessionId: sessionId, candidate: candidate, sdpMid: sdpMid, sdpMLineIndex: sdpMLineIndex))
+    }
+
+    func sendLiveStop(sessionId: String) {
+        send(Messages.liveStop(sessionId: sessionId))
     }
 
     func close() {

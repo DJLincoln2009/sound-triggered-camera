@@ -69,6 +69,10 @@ class Config:
         return self.data_dir / "camera_settings.json"
 
     @property
+    def live_path(self) -> Path:
+        return self.data_dir / "live.json"
+
+    @property
     def cert_path(self) -> Path:
         return self.data_dir / "cert.pem"
 
@@ -88,6 +92,20 @@ class Config:
     def save_camera_settings(self, settings: dict[str, Any]) -> None:
         self.settings_path.write_text(
             json.dumps(settings, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def load_live_enabled(self) -> bool:
+        """Diffusion en direct activée au choix par l'opérateur (off par défaut)."""
+        if self.live_path.exists():
+            try:
+                return bool(json.loads(self.live_path.read_text(encoding="utf-8")).get("enabled"))
+            except (ValueError, OSError):
+                return False
+        return False
+
+    def save_live_enabled(self, enabled: bool) -> None:
+        self.live_path.write_text(
+            json.dumps({"enabled": bool(enabled)}, indent=2), encoding="utf-8"
         )
 
 

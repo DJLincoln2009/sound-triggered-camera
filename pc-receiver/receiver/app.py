@@ -16,7 +16,7 @@ from simple_websocket import ConnectionClosed
 
 from . import protocol
 from .config import Config
-from .hub import CameraConnection, CameraHub
+from .hub import BrowserSignalSession, CameraConnection, CameraHub
 from .pairing import PairingManager
 from .storage import Storage
 
@@ -34,6 +34,8 @@ class AppContext:
         self.hub = CameraHub(config.offline_after_s, config.ack_timeout_s)
         self.hub.on_event = self._log_event
         self.camera_settings: dict[str, Any] = config.load_camera_settings()
+        # Diffusion en direct activée au choix par l'opérateur (off par défaut).
+        self.live_enabled: bool = config.load_live_enabled()
 
     def _log_event(self, type_: str, device_id: str | None, detail: str | None) -> None:
         self.storage.add_event(type_, device_id, detail)
@@ -73,6 +75,11 @@ def create_app(config: Config) -> tuple[Flask, AppContext]:
             _serve_connection(ws, conn, ctx)
         finally:
             ctx.hub.remove(conn.device_id)
+
+    # --------------------------------- signaling navigateur (live WebRTC) -----
+    @sock.route("/signal")
+    def ws_signal(ws):  # noqa: ANN001
+        _serve_signal(ws, ctx)
 
     # ------------------------------------------------- upload vidéo HTTP ------
     @app.post("/upload")
@@ -114,10 +121,22 @@ def create_app(config: Config) -> tuple[Flask, AppContext]:
                 "server_name": config.server_name,
                 "pairing_pin": ctx.pairing.pin,
                 "tls": config.tls,
+                "live_enabled": ctx.live_enabled,
                 "cameras": ctx.hub.snapshots(),
                 "settings": ctx.camera_settings,
             }
         )
+
+    @app.post("/api/live")
+    def api_live():
+        enabled = bool((request.json or {}).get("enabled"))
+        ctx.live_enabled = enabled
+        config.save_live_enabled(enabled)
+        ctx.storage.add_event(
+            "live", None,
+            "Diffusion en direct " + ("activée" if enabled else "désactivée"),
+        )
+        return jsonify({"live_enabled": ctx.live_enabled})
 
     @app.post("/api/trigger")
     def api_trigger():
@@ -249,3 +268,68 @@ def _serve_connection(ws, conn: CameraConnection, ctx: AppContext) -> None:  # n
         except (ValueError, json.JSONDecodeError):
             continue
         ctx.hub.handle_camera_message(conn, msg)
+
+
+def _serve_signal(ws, ctx: AppContext) -> None:  # noqa: ANN001
+    """Sert la WebSocket de signaling d'un navigateur (récepteur WebRTC du live).
+
+    Le PC ne fait que relayer offre/réponse/ICE entre le navigateur et la caméra ; il
+    n'interprète pas le média. Les types ``LIVE_START``/``LIVE_STARTED``/``LIVE_ERROR``
+    sont locaux navigateur↔PC ; les types ``LIVE_*`` du protocole sont relayés à la caméra.
+    """
+    session = BrowserSignalSession()
+    try:
+        while True:
+            try:
+                while True:
+                    out = session.outgoing.get_nowait()
+                    ws.send(protocol.dumps(out))
+            except queue.Empty:
+                pass
+
+            try:
+                raw = ws.receive(timeout=0.05)
+            except ConnectionClosed:
+                break
+            if raw is None:
+                continue
+            try:
+                msg = protocol.loads(raw)
+            except (ValueError, json.JSONDecodeError):
+                continue
+            _handle_signal_message(session, ctx, msg)
+    finally:
+        # Le navigateur part : ferme ses sessions live et prévient les caméras.
+        for sid in list(session.live_sessions):
+            ctx.hub.route_from_browser(sid, protocol.live_stop(sid))
+            ctx.hub.live_close(sid)
+
+
+def _handle_signal_message(
+    session: "BrowserSignalSession", ctx: AppContext, msg: dict[str, Any]
+) -> None:
+    mtype = msg.get("type")
+
+    if mtype == "LIVE_START":
+        if not ctx.live_enabled:
+            session.enqueue({"type": "LIVE_ERROR",
+                             "reason": "La diffusion en direct est désactivée sur le PC."})
+            return
+        device_id = msg.get("device_id")
+        camera = ctx.hub.get(device_id) if device_id else ctx.hub.first()
+        if camera is None or not camera.is_online(ctx.hub.offline_after_s):
+            session.enqueue({"type": "LIVE_ERROR", "reason": "Caméra indisponible."})
+            return
+        session_id = msg.get("session_id") or uuid.uuid4().hex
+        ctx.hub.live_open(session_id, camera, session)
+        camera.enqueue(protocol.live_request(session_id))
+        ctx.storage.add_event("live", camera.device_id,
+                              f"Session live démarrée ({session_id[:8]})")
+        session.enqueue({"type": "LIVE_STARTED", "session_id": session_id,
+                         "device_id": camera.device_id})
+    elif mtype in protocol.LIVE_TYPES:
+        # LIVE_ANSWER / LIVE_ICE / LIVE_STOP du navigateur -> caméra.
+        sid = msg.get("session_id", "")
+        ctx.hub.route_from_browser(sid, msg)
+        if mtype == protocol.MsgType.LIVE_STOP:
+            ctx.hub.live_close(sid)

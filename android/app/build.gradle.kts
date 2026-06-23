@@ -82,6 +82,9 @@ dependencies {
     // Classification audio embarquée optionnelle (YAMNet, EF-04)
     implementation(libs.tflite.task.audio)
 
+    // Diffusion en direct optionnelle (WebRTC) — pair émetteur, signaling via /ws
+    implementation(libs.webrtc)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

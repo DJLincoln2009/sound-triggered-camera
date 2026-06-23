@@ -26,6 +26,7 @@ final class CameraController: NSObject, ObservableObject, CommandClient.Delegate
     private let pending = PendingUploads()
     private let uploader = VideoUploader()
     private var client: CommandClient?
+    private var live: LiveStreamer?
     private var cancellables = Set<AnyCancellable>()
 
     private var isForeground = true
@@ -61,6 +62,7 @@ final class CameraController: NSObject, ObservableObject, CommandClient.Delegate
         detector.stop()
         discovery.stop()
         camera.stopSession()
+        live?.stop()
         client?.close()
         heartbeat?.invalidate()
         connected = false
@@ -279,5 +281,47 @@ final class CameraController: NSObject, ObservableObject, CommandClient.Delegate
 
     func onDisconnected() {
         DispatchQueue.main.async { self.connected = false }
+    }
+
+    // MARK: - Diffusion en direct (WebRTC, optionnelle)
+
+    func onLiveRequest(sessionId: String) {
+        DispatchQueue.main.async {
+            // iOS : la capture n'est possible qu'au premier plan (§7.2).
+            guard self.isForeground else {
+                self.client?.sendLiveStop(sessionId: sessionId)
+                self.lastEvent = "Live demandé : indisponible en arrière-plan (iOS)"
+                return
+            }
+            if self.live == nil { self.live = LiveStreamer(signaling: self) }
+            self.live?.start(sessionId: sessionId)
+            self.lastEvent = "Diffusion en direct démarrée"
+        }
+    }
+
+    func onLiveAnswer(sessionId: String, sdp: String) {
+        live?.onAnswer(sessionId: sessionId, sdp: sdp)
+    }
+
+    func onLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int32) {
+        live?.onRemoteIce(sessionId: sessionId, candidate: candidate, sdpMid: sdpMid, sdpMLineIndex: sdpMLineIndex)
+    }
+
+    func onLiveStop(sessionId: String) {
+        live?.stop()
+    }
+}
+
+extension CameraController: LiveStreamer.Signaling {
+    func sendOffer(sessionId: String, sdp: String) {
+        client?.sendLiveOffer(sessionId: sessionId, sdp: sdp)
+    }
+
+    func sendIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int32) {
+        client?.sendLiveIce(sessionId: sessionId, candidate: candidate, sdpMid: sdpMid, sdpMLineIndex: sdpMLineIndex)
+    }
+
+    func sendStop(sessionId: String) {
+        client?.sendLiveStop(sessionId: sessionId)
     }
 }

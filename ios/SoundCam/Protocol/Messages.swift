@@ -15,6 +15,12 @@ enum Messages {
         static let soundTriggered = "SOUND_TRIGGERED"
         static let status = "STATUS"
         static let ack = "ACK"
+        // Diffusion en direct WebRTC (signaling relayé par le PC).
+        static let liveRequest = "LIVE_REQUEST"
+        static let liveOffer = "LIVE_OFFER"
+        static let liveAnswer = "LIVE_ANSWER"
+        static let liveIce = "LIVE_ICE"
+        static let liveStop = "LIVE_STOP"
     }
 
     static func nowISO() -> String {
@@ -81,6 +87,28 @@ enum Messages {
             "reason": reason as Any? ?? NSNull(),
             "recording_id": recordingId as Any? ?? NSNull(),
         ])
+    }
+
+    // MARK: - Diffusion en direct (caméra -> PC -> navigateur)
+
+    static func liveOffer(sessionId: String, sdp: String) -> String {
+        encode(["type": MsgType.liveOffer, "session_id": sessionId, "sdp": sdp])
+    }
+
+    static func liveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int32) -> String {
+        encode([
+            "type": MsgType.liveIce,
+            "session_id": sessionId,
+            "candidate": [
+                "candidate": candidate,
+                "sdpMid": sdpMid as Any? ?? NSNull(),
+                "sdpMLineIndex": sdpMLineIndex,
+            ],
+        ])
+    }
+
+    static func liveStop(sessionId: String) -> String {
+        encode(["type": MsgType.liveStop, "session_id": sessionId])
     }
 }
 

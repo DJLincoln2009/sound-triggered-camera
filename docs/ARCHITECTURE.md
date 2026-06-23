@@ -41,16 +41,35 @@ sur l'appareil de réception »). Avantages :
 - La reconnexion est portée par le client (backoff exponentiel), naturel pour un mobile
   dont la connectivité varie (ENF-04).
 
-## 3. Deux canaux logiques
+## 3. Trois canaux logiques
 
 1. **Canal de commandes** — WebSocket bidirectionnel (`/ws`). Messages JSON typés
    (`HELLO`, `START_RECORDING`, `STOP_RECORDING`, `SET_SETTINGS`, `STATUS`, `ACK`,
-   `SOUND_TRIGGERED`). Voir `protocol/PROTOCOL.md`.
-2. **Canal vidéo** — HTTP `POST /upload` (multipart), **caméra → PC**, **différé** : la
-   caméra enregistre localement puis téléverse, avec reprise après coupure (EF-08/EF-09).
+   `SOUND_TRIGGERED`, et le signaling `LIVE_*`). Voir `protocol/PROTOCOL.md`.
+2. **Canal vidéo différé** — HTTP `POST /upload` (multipart), **caméra → PC**, **différé** :
+   la caméra enregistre localement puis téléverse, avec reprise après coupure (EF-08/EF-09).
+3. **Canal live (optionnel)** — flux vidéo **WebRTC** temps réel, **caméra → navigateur du
+   dashboard PC**. Désactivé par défaut, **activé au choix côté PC** (§3 bis).
 
 Séparer commandes (petits messages temps réel) et vidéo (gros transferts) évite que
 l'upload ne bloque le pilotage, et simplifie la résilience.
+
+### 3 bis. Diffusion en direct (WebRTC, optionnelle)
+
+- **Récepteur = le navigateur du dashboard** (élément `<video>`) : c'est lui le second
+  pair WebRTC, ce qui évite une pile WebRTC lourde côté serveur Python.
+- **Émetteur = l'app caméra** (Android `LiveStreamer.kt`, iOS `LiveStreamer.swift`).
+- **Le serveur PC est un simple relais de signaling** : il transmet les messages `LIVE_*`
+  (offre/réponse/ICE) entre le navigateur (WebSocket `/signal`) et la caméra (`/ws`) sans
+  jamais traiter le média (`CameraHub.route_from_browser` / `route_from_camera`).
+- **Activation au choix** : un état `live_enabled` (persisté dans `live.json`, **off par
+  défaut**) gouverne la fonctionnalité. Tant qu'il est off, le bouton « Voir en direct »
+  est désactivé et toute demande de live est refusée par le serveur.
+- **100 % local** : `iceServers: []` côté navigateur et caméra ⇒ aucun STUN/TURN externe ;
+  seuls les candidats ICE du LAN sont utilisés (EF-24 / ENF-08).
+- **Limites** : iOS au premier plan uniquement (§7.2) ; la caméra n'est en général pas
+  partageable entre enregistrement et live ; surcoût CPU/batterie ⇒ d'où l'activation
+  manuelle.
 
 ## 4. Déclenchement : sonore + manuel, unifiés
 

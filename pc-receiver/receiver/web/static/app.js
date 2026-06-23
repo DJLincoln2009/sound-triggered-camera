@@ -54,6 +54,7 @@ async function pollState() {
     state = body;
     renderPairing();
     renderCameras();
+    renderLive();
   }
 }
 
@@ -128,6 +129,116 @@ $("#btn-stop").addEventListener("click", async () => {
   if (ok && body.ok) feedback(fb, "Arrêt confirmé (ACK reçu).", "ok");
   else feedback(fb, "Échec : " + (body && body.reason ? body.reason : "commande non acquittée"), "err");
 });
+
+// --- Diffusion en direct (WebRTC, activée au choix côté PC) -----------------
+// Le navigateur est le pair récepteur ; le PC ne fait que relayer le signaling
+// (offre/réponse/ICE) entre ce navigateur et la caméra via la WebSocket /signal.
+// 100 % local : aucun serveur STUN/TURN externe (candidats ICE du LAN uniquement).
+let signalWs = null;
+let pc = null;
+let liveSessionId = null;
+
+function renderLive() {
+  const toggle = $("#live-enabled");
+  if (document.activeElement !== toggle) toggle.checked = !!state.live_enabled;
+  const hasCamera = state.cameras.some((c) => c.online);
+  $("#btn-live").disabled = !state.live_enabled || !hasCamera || !!liveSessionId;
+}
+
+function liveFeedback(msg, kind) { feedback($("#live-feedback"), msg, kind); }
+
+function signalUrl() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/signal`;
+}
+
+$("#live-enabled").addEventListener("change", async (e) => {
+  const enabled = e.target.checked;
+  const { ok, body } = await api("/api/live", {
+    method: "POST", body: JSON.stringify({ enabled }),
+  });
+  if (ok) {
+    state.live_enabled = body.live_enabled;
+    if (!body.live_enabled) stopLive();
+    renderLive();
+  }
+});
+
+$("#btn-live").addEventListener("click", () => startLive());
+$("#btn-live-stop").addEventListener("click", () => stopLive());
+
+function sendSignal(obj) {
+  if (signalWs && signalWs.readyState === WebSocket.OPEN) signalWs.send(JSON.stringify(obj));
+}
+
+function startLive() {
+  if (signalWs) return;
+  const device_id = $("#target-camera").value || null;
+  $("#live-card").style.display = "block";
+  liveFeedback("Connexion au flux…");
+  renderLive();
+  signalWs = new WebSocket(signalUrl());
+  signalWs.onopen = () => signalWs.send(JSON.stringify({ type: "LIVE_START", device_id }));
+  signalWs.onmessage = onSignalMessage;
+  signalWs.onclose = () => { signalWs = null; renderLive(); };
+  signalWs.onerror = () => liveFeedback("Erreur de connexion au signaling.", "err");
+}
+
+async function onSignalMessage(ev) {
+  let msg;
+  try { msg = JSON.parse(ev.data); } catch (_) { return; }
+  switch (msg.type) {
+    case "LIVE_STARTED":
+      liveSessionId = msg.session_id;
+      liveFeedback("En attente du flux de la caméra…");
+      renderLive();
+      break;
+    case "LIVE_ERROR":
+      liveFeedback("Erreur : " + (msg.reason || "inconnue"), "err");
+      stopLive();
+      break;
+    case "LIVE_OFFER":
+      await onLiveOffer(msg);
+      break;
+    case "LIVE_ICE":
+      if (pc && msg.candidate) { try { await pc.addIceCandidate(msg.candidate); } catch (_) {} }
+      break;
+    case "LIVE_STOP":
+      liveFeedback("Diffusion terminée par la caméra.");
+      stopLive();
+      break;
+  }
+}
+
+async function onLiveOffer(msg) {
+  pc = new RTCPeerConnection({ iceServers: [] });
+  pc.ontrack = (e) => {
+    $("#live-video").srcObject = e.streams[0];
+    liveFeedback("En direct.", "ok");
+  };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) sendSignal({ type: "LIVE_ICE", session_id: liveSessionId, candidate: e.candidate });
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected"))
+      liveFeedback("Connexion vidéo perdue.", "err");
+  };
+  await pc.setRemoteDescription({ type: "offer", sdp: msg.sdp });
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  sendSignal({ type: "LIVE_ANSWER", session_id: liveSessionId, sdp: answer.sdp });
+}
+
+function stopLive() {
+  if (liveSessionId) sendSignal({ type: "LIVE_STOP", session_id: liveSessionId });
+  if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+  if (signalWs) { try { signalWs.close(); } catch (_) {} signalWs = null; }
+  const v = $("#live-video");
+  if (v && v.srcObject) { v.srcObject.getTracks().forEach((t) => t.stop()); v.srcObject = null; }
+  liveSessionId = null;
+  $("#live-card").style.display = "none";
+  renderLive();
+}
 
 // --- Bibliothèque (EF-16, EF-17, EF-20) -------------------------------------
 async function loadRecordings() {

@@ -1,0 +1,11 @@
+# Dépendances de développement / test (non requises pour exécuter l'app PC).
+-r requirements.txt
+
+# Tests
+pytest>=8.0,<9.0
+
+# Simulateur de caméra en mode diffusion en direct (--live) : pair WebRTC émetteur.
+# Uniquement nécessaire pour tester le live sans téléphone. L'app PC, elle, n'a PAS
+# besoin de WebRTC côté serveur : c'est le navigateur du dashboard qui reçoit le flux.
+aiortc>=1.9,<2.0
+numpy>=1.26

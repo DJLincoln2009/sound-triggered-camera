@@ -24,16 +24,39 @@ class MsgType:
     SOUND_TRIGGERED = "SOUND_TRIGGERED"
     STATUS = "STATUS"
     ACK = "ACK"
+    # Diffusion en direct WebRTC (signaling relayé par le PC). Optionnel, activé au choix.
+    LIVE_REQUEST = "LIVE_REQUEST"    # PC -> caméra : démarre une session live
+    LIVE_OFFER = "LIVE_OFFER"        # caméra -> PC -> navigateur : SDP offer
+    LIVE_ANSWER = "LIVE_ANSWER"      # navigateur -> PC -> caméra : SDP answer
+    LIVE_ICE = "LIVE_ICE"            # bidirectionnel : candidat ICE (trickle)
+    LIVE_STOP = "LIVE_STOP"          # bidirectionnel : termine la session live
 
+
+# Types relatifs au live, relayés tels quels entre navigateur et caméra.
+LIVE_TYPES = {
+    MsgType.LIVE_REQUEST,
+    MsgType.LIVE_OFFER,
+    MsgType.LIVE_ANSWER,
+    MsgType.LIVE_ICE,
+    MsgType.LIVE_STOP,
+}
 
 # Messages émis par la caméra vers le PC.
-CAMERA_TO_PC = {MsgType.HELLO, MsgType.SOUND_TRIGGERED, MsgType.STATUS, MsgType.ACK}
+CAMERA_TO_PC = {
+    MsgType.HELLO, MsgType.SOUND_TRIGGERED, MsgType.STATUS, MsgType.ACK,
+    MsgType.LIVE_OFFER, MsgType.LIVE_ANSWER, MsgType.LIVE_ICE, MsgType.LIVE_STOP,
+}
 # Messages émis par le PC vers la caméra.
 PC_TO_CAMERA = {
     MsgType.HELLO_ACK,
     MsgType.START_RECORDING,
     MsgType.STOP_RECORDING,
     MsgType.SET_SETTINGS,
+    MsgType.LIVE_REQUEST,
+    MsgType.LIVE_OFFER,
+    MsgType.LIVE_ANSWER,
+    MsgType.LIVE_ICE,
+    MsgType.LIVE_STOP,
 }
 
 VALID_STATES = {"idle", "listening", "recording", "transferring"}
@@ -100,3 +123,19 @@ def set_settings(request_id: str, settings: dict[str, Any]) -> dict[str, Any]:
     msg: dict[str, Any] = {"type": MsgType.SET_SETTINGS, "request_id": request_id}
     msg.update(settings)
     return msg
+
+
+# --- Diffusion en direct (WebRTC) ---------------------------------------------
+
+def live_request(session_id: str) -> dict[str, Any]:
+    """PC -> caméra : demande l'ouverture d'une session de diffusion en direct."""
+    return {
+        "type": MsgType.LIVE_REQUEST,
+        "session_id": session_id,
+        "timestamp": utc_now_iso(),
+    }
+
+
+def live_stop(session_id: str) -> dict[str, Any]:
+    """Termine une session de diffusion en direct (PC/navigateur ou caméra)."""
+    return {"type": MsgType.LIVE_STOP, "session_id": session_id}

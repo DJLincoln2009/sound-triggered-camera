@@ -27,6 +27,13 @@ object Messages {
     const val STATUS = "STATUS"
     const val ACK = "ACK"
 
+    // Diffusion en direct WebRTC (signaling relayé par le PC).
+    const val LIVE_REQUEST = "LIVE_REQUEST"
+    const val LIVE_OFFER = "LIVE_OFFER"
+    const val LIVE_ANSWER = "LIVE_ANSWER"
+    const val LIVE_ICE = "LIVE_ICE"
+    const val LIVE_STOP = "LIVE_STOP"
+
     private val iso: SimpleDateFormat
         get() = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
@@ -79,6 +86,30 @@ object Messages {
             put("reason", reason ?: JSONObject.NULL)
             put("recording_id", recordingId ?: JSONObject.NULL)
         }.toString()
+
+    // --- Diffusion en direct (caméra -> PC -> navigateur) --------------------
+
+    fun liveOffer(sessionId: String, sdp: String): String = JSONObject().apply {
+        put("type", LIVE_OFFER)
+        put("session_id", sessionId)
+        put("sdp", sdp)
+    }.toString()
+
+    fun liveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int): String =
+        JSONObject().apply {
+            put("type", LIVE_ICE)
+            put("session_id", sessionId)
+            put("candidate", JSONObject().apply {
+                put("candidate", candidate)
+                put("sdpMid", sdpMid ?: JSONObject.NULL)
+                put("sdpMLineIndex", sdpMLineIndex)
+            })
+        }.toString()
+
+    fun liveStop(sessionId: String): String = JSONObject().apply {
+        put("type", LIVE_STOP)
+        put("session_id", sessionId)
+    }.toString()
 }
 
 /** Identité de l'appareil caméra annoncée dans le HELLO. */

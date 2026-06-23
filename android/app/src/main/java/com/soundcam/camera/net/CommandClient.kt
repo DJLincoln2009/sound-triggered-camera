@@ -32,6 +32,10 @@ class CommandClient(
         fun onStartRecording(requestId: String, maxDurationS: Double)
         fun onStopRecording(requestId: String)
         fun onSetSettings(requestId: String, settings: RemoteSettings)
+        fun onLiveRequest(sessionId: String)
+        fun onLiveAnswer(sessionId: String, sdp: String)
+        fun onLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int)
+        fun onLiveStop(sessionId: String)
         fun onDisconnected()
     }
 
@@ -119,6 +123,21 @@ class CommandClient(
                 callback.onStopRecording(o.optString("request_id"))
             Messages.SET_SETTINGS ->
                 callback.onSetSettings(o.optString("request_id"), RemoteSettings.fromJson(o))
+            Messages.LIVE_REQUEST ->
+                callback.onLiveRequest(o.optString("session_id"))
+            Messages.LIVE_ANSWER ->
+                callback.onLiveAnswer(o.optString("session_id"), o.optString("sdp"))
+            Messages.LIVE_ICE -> {
+                val c = o.optJSONObject("candidate")
+                if (c != null) callback.onLiveIce(
+                    o.optString("session_id"),
+                    c.optString("candidate"),
+                    if (c.isNull("sdpMid")) null else c.optString("sdpMid"),
+                    c.optInt("sdpMLineIndex", 0),
+                )
+            }
+            Messages.LIVE_STOP ->
+                callback.onLiveStop(o.optString("session_id"))
         }
     }
 
@@ -147,6 +166,18 @@ class CommandClient(
 
     fun sendSoundTriggered(recordingId: String, confidence: Float, label: String?) {
         webSocket?.send(Messages.soundTriggered(recordingId, confidence, label))
+    }
+
+    fun sendLiveOffer(sessionId: String, sdp: String) {
+        webSocket?.send(Messages.liveOffer(sessionId, sdp))
+    }
+
+    fun sendLiveIce(sessionId: String, candidate: String, sdpMid: String?, sdpMLineIndex: Int) {
+        webSocket?.send(Messages.liveIce(sessionId, candidate, sdpMid, sdpMLineIndex))
+    }
+
+    fun sendLiveStop(sessionId: String) {
+        webSocket?.send(Messages.liveStop(sessionId))
     }
 
     fun close() {

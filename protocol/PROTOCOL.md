@@ -11,13 +11,14 @@ et l'app PC (Python) doivent toutes s'y conformer.
 
 ## 1. Vue d'ensemble
 
-Deux canaux logiques transitent **exclusivement sur le réseau Wi-Fi local** (aucun cloud,
+Les canaux logiques transitent **exclusivement sur le réseau Wi-Fi local** (aucun cloud,
 EF-24 / ENF-08) :
 
 | Canal | Transport | Sens | Rôle |
 |-------|-----------|------|------|
-| **Canal de commandes** | WebSocket (`ws://` ou `wss://`) | bidirectionnel | Pilotage, réglages, accusés de réception, statut |
-| **Canal vidéo** | HTTP (`POST` multipart) | caméra → PC | Transfert différé des enregistrements |
+| **Canal de commandes** | WebSocket (`ws://` ou `wss://`) | bidirectionnel | Pilotage, réglages, accusés de réception, statut, signaling live |
+| **Canal vidéo (différé)** | HTTP (`POST` multipart) | caméra → PC | Transfert différé des enregistrements |
+| **Canal live (optionnel)** | WebRTC (média) + signaling sur WebSocket | caméra → navigateur PC | Diffusion vidéo en direct, activée au choix (voir §6) |
 
 - Le **PC est le serveur** (WebSocket + HTTP). Il publie un service mDNS.
 - La **caméra est le client**. Elle découvre le PC par mDNS puis ouvre une connexion
@@ -216,7 +217,71 @@ La caméra réessaie l'upload avec backoff tant que la réponse n'est pas `200` 
 
 ---
 
-## 6. Gestion de la concurrence (EF-07)
+## 6. Diffusion en direct (WebRTC) — optionnelle
+
+La diffusion en direct est un **ajout optionnel**, **désactivé par défaut** et **activé au
+choix par l'opérateur** côté PC (interrupteur du dashboard, persisté). Tant qu'elle est
+désactivée, le PC refuse toute demande de live.
+
+### 6.1 Rôles
+
+- **Émetteur** : l'app caméra (Android/iOS), via WebRTC.
+- **Récepteur** : le **navigateur du dashboard PC** (élément `<video>`), qui est le second
+  pair WebRTC. Le serveur PC n'interprète pas le média.
+- **Signaling** : le serveur PC **relaie** les messages `LIVE_*` entre le navigateur
+  (WebSocket `/signal`) et la caméra (WebSocket `/ws`). Le navigateur s'identifie auprès du
+  PC par un message local `LIVE_START` (hors protocole caméra).
+- **100 % local** : aucun serveur **STUN/TURN** externe. La connexion repose uniquement sur
+  les candidats ICE du réseau local (caméra et PC sur le même LAN). C'est une condition de
+  l'architecture sans cloud (EF-24 / ENF-08).
+
+### 6.2 Déroulé
+
+```
+  Navigateur (récepteur)        PC (relais)            Caméra (émetteur)
+  ──────────────────────        ───────────            ─────────────────
+   LIVE_START {device_id} ──────────>│                         │
+   (si live activé)                  │   LIVE_REQUEST {sid} ───>│
+                                     │ <── LIVE_OFFER {sdp} ────│  (createOffer)
+   <──── LIVE_OFFER {sdp} ──────────│                          │
+   LIVE_ANSWER {sdp} ───────────────>│   LIVE_ANSWER {sdp} ────>│
+   <───── LIVE_ICE  ────────────────│ <───── LIVE_ICE ────────>│  (trickle ICE)
+   LIVE_ICE ────────────────────────>│   LIVE_ICE ─────────────>│
+   ════════════ flux vidéo WebRTC P2P (LAN) ═══════════════════>│
+   LIVE_STOP ───────────────────────>│   LIVE_STOP ────────────>│
+```
+
+L'**offre** est créée par la **caméra** (qui détient le média) dès réception de
+`LIVE_REQUEST`. Le navigateur, n'ajoutant aucune piste, génère une réponse `recvonly`.
+
+### 6.3 Messages `LIVE_*` (sur le canal de commandes)
+
+```json
+{ "type": "LIVE_REQUEST", "session_id": "<sid>", "timestamp": "..." }   // PC -> caméra
+{ "type": "LIVE_OFFER",   "session_id": "<sid>", "sdp": "v=0..." }       // caméra -> navigateur
+{ "type": "LIVE_ANSWER",  "session_id": "<sid>", "sdp": "v=0..." }       // navigateur -> caméra
+{ "type": "LIVE_ICE",     "session_id": "<sid>",
+  "candidate": { "candidate": "candidate:...", "sdpMid": "0", "sdpMLineIndex": 0 } }  // bidirectionnel
+{ "type": "LIVE_STOP",    "session_id": "<sid>" }                        // bidirectionnel
+```
+
+- `session_id` : identifiant unique de session, généré par le PC, présent dans tous les
+  messages d'une même diffusion (permet plusieurs sessions et un routage fiable).
+- Le candidat ICE suit la forme `RTCIceCandidateInit` du navigateur (`candidate`,
+  `sdpMid`, `sdpMLineIndex`).
+
+### 6.4 Limites
+
+- **iOS** : capture **au premier plan uniquement** (§7.2). Une `LIVE_REQUEST` reçue en
+  arrière-plan est refusée par un `LIVE_STOP`.
+- **Partage caméra** : sur la plupart des appareils, la caméra ne peut pas être ouverte
+  simultanément par l'enregistrement et par le live ; le live vise la **supervision**.
+- **Surcoût** : encodage temps réel ⇒ consommation CPU/batterie plus élevée que le mode
+  différé. D'où l'activation **au choix**.
+
+---
+
+## 7. Gestion de la concurrence (EF-07)
 
 Le déclenchement sonore et le déclenchement manuel aboutissent à **la même action**. Si
 un enregistrement est déjà en cours, une nouvelle demande (quelle que soit l'origine) :
@@ -228,7 +293,7 @@ Les déclenchements sont donc **idempotents** par enregistrement actif.
 
 ---
 
-## 7. Résilience (ENF-04, ENF-05)
+## 8. Résilience (ENF-04, ENF-05)
 
 - Toute commande sans `ACK` dans un délai (par défaut 5 s) est signalée **échec** côté PC.
 - La caméra conserve les enregistrements localement et les téléverse à la reconnexion.
@@ -236,7 +301,7 @@ Les déclenchements sont donc **idempotents** par enregistrement actif.
 
 ---
 
-## 8. Versionnage
+## 9. Versionnage
 
 Champ `protocol` (entier). Version courante : **1**. Toute évolution incompatible
 incrémente ce numéro ; `HELLO_ACK` peut rejeter une version non supportée

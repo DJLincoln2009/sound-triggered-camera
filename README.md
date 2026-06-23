@@ -3,6 +3,7 @@
 Système de surveillance **100 % local** (aucun cloud) qui transforme un smartphone en
 caméra déclenchée **par le son** (automatique) ou **à distance** (manuelle), avec
 réception, stockage et pilotage depuis un **PC**. Technologies **gratuites et open source**.
+Option de **diffusion en direct (WebRTC)**, activée au choix depuis le PC.
 
 > Réalisation complète du cahier des charges et de l'étude de faisabilité : trois
 > applications (Android, iOS allégée, PC) + un protocole réseau partagé.
@@ -68,8 +69,11 @@ La caméra est découverte automatiquement (mDNS) et apparaît dans le tableau d
   télémétrie (EF-24 / ENF-08).
 - **PC serveur, caméras clientes** : découverte mDNS, reconnexion automatique, l'opérateur
   ne saisit aucune IP.
-- **Deux canaux** : commandes (WebSocket, bidirectionnel) et vidéo (HTTP, transfert
-  différé avec reprise).
+- **Trois canaux** : commandes (WebSocket, bidirectionnel), vidéo différée (HTTP, avec
+  reprise) et **diffusion en direct optionnelle** (WebRTC P2P sur le LAN, signaling relayé
+  par le PC, activée au choix — voir [PROTOCOL.md §6](protocol/PROTOCOL.md)).
+- **Live 100 % local** : aucun serveur STUN/TURN externe ; le navigateur du dashboard est
+  le récepteur WebRTC, le PC ne fait que relayer le signaling.
 - **Sécurité** : appairage obligatoire (PIN → token fort), TLS optionnel (certificat
   auto-signé), modèle TOFU sur réseau de confiance.
 - **Séparation claire** : `protocol/` est la source de vérité ; chaque app implémente le

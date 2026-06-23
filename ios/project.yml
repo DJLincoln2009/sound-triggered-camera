@@ -7,6 +7,12 @@ options:
     iOS: "15.0"
   createIntermediateGroups: true
 
+# Diffusion en direct optionnelle (WebRTC) — binaire open source via SPM.
+packages:
+  WebRTC:
+    url: https://github.com/stasel/WebRTC.git
+    exactVersion: "137.0.0"
+
 settings:
   base:
     MARKETING_VERSION: "1.0.0"
@@ -21,6 +27,8 @@ targets:
     platform: iOS
     sources:
       - path: SoundCam
+    dependencies:
+      - package: WebRTC
     info:
       path: SoundCam/App/Info.plist
       properties:
