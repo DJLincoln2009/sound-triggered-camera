@@ -12,7 +12,6 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import com.soundcam.camera.MainActivity
 import com.soundcam.camera.R
 import com.soundcam.camera.audio.SoundDetector
 import com.soundcam.camera.capture.VideoRecorder
@@ -337,25 +336,20 @@ class CameraService : LifecycleService(), CommandClient.Callback {
     private fun createNotificationChannel() {
         val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
-            CHANNEL_ID, getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_LOW,
+            CHANNEL_ID, getString(R.string.notif_channel_name), NotificationManager.IMPORTANCE_MIN,
         ).apply { description = getString(R.string.notif_channel_desc) }
         mgr.createNotificationChannel(channel)
     }
 
     private fun buildNotification(recording: Boolean): Notification {
-        val tapIntent = Intent(this, MainActivity::class.java)
-        val pi = android.app.PendingIntent.getActivity(
-            this, 0, tapIntent,
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
-        )
         val text = if (recording) getString(R.string.notif_text_recording)
         else getString(R.string.notif_text_listening)
+        // Pas de contentIntent : la notification n'ouvre pas l'app au clic.
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notif_title))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setOngoing(true)
-            .setContentIntent(pi)
+            .setOngoing(false)
             .setColor(if (recording) 0xFFEF4444.toInt() else 0xFF3B82F6.toInt())
             .build()
     }
