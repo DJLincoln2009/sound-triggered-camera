@@ -1,0 +1,41 @@
+# Spécification de projet XcodeGen (open source) — génère SoundCam.xcodeproj.
+# Installation : brew install xcodegen ; puis : xcodegen generate
+name: SoundCam
+options:
+  bundleIdPrefix: com.soundcam
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""        # Renseignez votre Team ID Apple pour signer.
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  SoundCam:
+    type: application
+    platform: iOS
+    sources:
+      - path: SoundCam
+    info:
+      path: SoundCam/App/Info.plist
+      properties:
+        CFBundleDisplayName: SoundCam
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - audio          # écoute micro en arrière-plan (périmètre allégé, §7.2)
+        NSCameraUsageDescription: "SoundCam utilise la caméra pour enregistrer lors d'un déclenchement sonore ou manuel."
+        NSMicrophoneUsageDescription: "SoundCam écoute le micro pour détecter les sons déclencheurs."
+        NSLocalNetworkUsageDescription: "SoundCam communique avec l'application de réception sur votre réseau local."
+        NSBonjourServices:
+          - _soundcam._tcp
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.soundcam.ios
+        TARGETED_DEVICE_FAMILY: "1,2"

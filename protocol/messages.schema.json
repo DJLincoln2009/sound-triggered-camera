@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://soundcam.local/protocol/messages.schema.json",
+  "title": "SoundCam command-channel messages",
+  "description": "JSON Schema for the WebSocket command messages (protocol v1). See PROTOCOL.md.",
+  "type": "object",
+  "required": ["type"],
+  "properties": { "type": { "type": "string" } },
+  "oneOf": [
+    {
+      "title": "HELLO",
+      "properties": {
+        "type": { "const": "HELLO" },
+        "protocol": { "type": "integer" },
+        "token": { "type": "string" },
+        "device": {
+          "type": "object",
+          "required": ["id", "platform"],
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "platform": { "enum": ["android", "ios", "other"] },
+            "model": { "type": "string" },
+            "manufacturer": { "type": "string" },
+            "app_version": { "type": "string" }
+          }
+        }
+      },
+      "required": ["type", "protocol", "token", "device"]
+    },
+    {
+      "title": "HELLO_ACK",
+      "properties": {
+        "type": { "const": "HELLO_ACK" },
+        "accepted": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] },
+        "server_name": { "type": "string" },
+        "protocol": { "type": "integer" }
+      },
+      "required": ["type", "accepted"]
+    },
+    {
+      "title": "START_RECORDING",
+      "properties": {
+        "type": { "const": "START_RECORDING" },
+        "origin": { "enum": ["manual"] },
+        "request_id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "max_duration_s": { "type": "number", "minimum": 0 }
+      },
+      "required": ["type", "request_id"]
+    },
+    {
+      "title": "STOP_RECORDING",
+      "properties": {
+        "type": { "const": "STOP_RECORDING" },
+        "request_id": { "type": "string" }
+      },
+      "required": ["type", "request_id"]
+    },
+    {
+      "title": "SET_SETTINGS",
+      "properties": {
+        "type": { "const": "SET_SETTINGS" },
+        "request_id": { "type": "string" },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "video_quality": { "enum": ["SD_480P", "HD_720P", "FHD_1080P"] },
+        "use_classifier": { "type": "boolean" },
+        "target_labels": { "type": "array", "items": { "type": "string" } },
+        "transfer_mode": { "enum": ["deferred"] },
+        "active_hours": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string" },
+            "end": { "type": "string" },
+            "enabled": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["type", "request_id"]
+    },
+    {
+      "title": "SOUND_TRIGGERED",
+      "properties": {
+        "type": { "const": "SOUND_TRIGGERED" },
+        "timestamp": { "type": "string" },
+        "confidence": { "type": "number" },
+        "sound_label": { "type": ["string", "null"] },
+        "recording_id": { "type": "string" }
+      },
+      "required": ["type", "recording_id"]
+    },
+    {
+      "title": "STATUS",
+      "properties": {
+        "type": { "const": "STATUS" },
+        "state": { "enum": ["idle", "listening", "recording", "transferring"] },
+        "recording": { "type": "boolean" },
+        "battery_level": { "type": ["number", "null"] },
+        "recording_id": { "type": ["string", "null"] },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["type", "state", "recording"]
+    },
+    {
+      "title": "ACK",
+      "properties": {
+        "type": { "const": "ACK" },
+        "request_id": { "type": "string" },
+        "result": { "enum": ["ok", "error", "received"] },
+        "reason": { "type": ["string", "null"] },
+        "recording_id": { "type": ["string", "null"] }
+      },
+      "required": ["type", "request_id", "result"]
+    }
+  ]
+}

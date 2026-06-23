@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ server_name }} — Réception caméra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">●</span>
+      <div>
+        <div class="title">Caméra à déclenchement sonore et manuel</div>
+        <div class="subtitle" id="server-name">{{ server_name }}</div>
+      </div>
+    </div>
+    <div class="pairing">
+      <span class="pairing-label">Code d'appairage</span>
+      <span class="pairing-pin" id="pairing-pin">––––––</span>
+      <button class="btn btn-ghost" id="btn-regen" title="Régénère le PIN et révoque les appairages">↻</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="dashboard">Tableau de bord</button>
+    <button class="tab" data-tab="library">Bibliothèque</button>
+    <button class="tab" data-tab="settings">Réglages distants</button>
+    <button class="tab" data-tab="events">Journal d'événements</button>
+  </nav>
+
+  <main>
+    <!-- TABLEAU DE BORD ------------------------------------------------------>
+    <section class="panel active" id="tab-dashboard">
+      <div class="grid">
+        <div class="card">
+          <h2>Appareils caméra</h2>
+          <div id="cameras-empty" class="empty">Aucune caméra connectée. Démarrez l'app
+            caméra sur le même réseau Wi-Fi : elle apparaîtra ici automatiquement (mDNS).</div>
+          <ul class="cameras" id="cameras"></ul>
+        </div>
+
+        <div class="card controls">
+          <h2>Contrôle à distance</h2>
+          <div class="target">
+            <label for="target-camera">Caméra cible</label>
+            <select id="target-camera"></select>
+          </div>
+          <button class="btn btn-primary btn-big" id="btn-trigger">
+            ● Déclencher l'enregistrement
+          </button>
+          <button class="btn btn-danger btn-big" id="btn-stop">
+            ■ Arrêter l'enregistrement
+          </button>
+          <div class="hint" id="control-feedback"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Derniers enregistrements reçus</h2>
+        <ul class="recent" id="recent"></ul>
+      </div>
+    </section>
+
+    <!-- BIBLIOTHEQUE --------------------------------------------------------->
+    <section class="panel" id="tab-library">
+      <div class="card">
+        <div class="library-toolbar">
+          <h2>Bibliothèque d'enregistrements</h2>
+          <div class="filters">
+            <label>Origine
+              <select id="filter-origin">
+                <option value="">Toutes</option>
+                <option value="sound">Sonore</option>
+                <option value="manual">Manuel</option>
+              </select>
+            </label>
+            <label><input type="checkbox" id="filter-archived" /> Inclure archives</label>
+          </div>
+        </div>
+        <div class="library-layout">
+          <table class="rec-table">
+            <thead>
+              <tr><th>Date</th><th>Heure</th><th>Origine</th><th>Durée</th><th>Taille</th><th></th></tr>
+            </thead>
+            <tbody id="rec-rows"></tbody>
+          </table>
+          <div class="player">
+            <video id="player" controls preload="metadata"></video>
+            <div class="player-meta" id="player-meta">Sélectionnez un enregistrement
+              (double-clic) pour le lire.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REGLAGES ------------------------------------------------------------->
+    <section class="panel" id="tab-settings">
+      <div class="card">
+        <h2>Réglages distants de la caméra</h2>
+        <p class="hint">Appliqués sans redémarrage de l'app caméra (EF-10 / EF-18). Les
+          réglages sont aussi poussés automatiquement à chaque connexion.</p>
+        <form id="settings-form" class="settings-form">
+          <label>Seuil de sensibilité sonore : <output id="threshold-out">0.35</output>
+            <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.35" />
+          </label>
+          <label>Qualité vidéo
+            <select id="video_quality">
+              <option value="SD_480P">480p</option>
+              <option value="HD_720P" selected>720p</option>
+              <option value="FHD_1080P">1080p</option>
+            </select>
+          </label>
+          <label><input type="checkbox" id="use_classifier" /> Utiliser le classifieur audio
+            (YAMNet / TFLite) plutôt qu'un simple seuil d'amplitude</label>
+          <label>Catégories de sons ciblées (séparées par des virgules)
+            <input type="text" id="target_labels" placeholder="Speech, Dog, Glass" />
+          </label>
+          <fieldset class="active-hours">
+            <legend>Plages horaires actives</legend>
+            <label><input type="checkbox" id="ah_enabled" /> Activer</label>
+            <label>De <input type="time" id="ah_start" value="00:00" /></label>
+            <label>à <input type="time" id="ah_end" value="23:59" /></label>
+          </fieldset>
+          <button type="submit" class="btn btn-primary">Appliquer les réglages</button>
+          <div class="hint" id="settings-feedback"></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- JOURNAL -------------------------------------------------------------->
+    <section class="panel" id="tab-events">
+      <div class="card">
+        <h2>Journal d'événements</h2>
+        <table class="events-table">
+          <thead><tr><th>Horodatage (UTC)</th><th>Type</th><th>Caméra</th><th>Détail</th></tr></thead>
+          <tbody id="event-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

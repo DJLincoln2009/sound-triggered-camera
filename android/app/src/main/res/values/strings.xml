@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">SoundCam</string>
+    <string name="notif_channel_name">Service de capture</string>
+    <string name="notif_channel_desc">Indique que la caméra est active (déclenchement sonore et manuel).</string>
+    <string name="notif_title">SoundCam — surveillance active</string>
+    <string name="notif_text_listening">À l\'écoute. Déclenchement sonore et manuel actifs.</string>
+    <string name="notif_text_recording">Enregistrement en cours…</string>
+</resources>

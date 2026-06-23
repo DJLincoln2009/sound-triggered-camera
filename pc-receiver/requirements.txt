@@ -1,0 +1,6 @@
+# Application de réception PC — dépendances (toutes open source, EF/ENF §9.3)
+Flask>=3.0,<4.0
+flask-sock>=0.7,<0.8
+simple-websocket>=1.0,<2.0
+zeroconf>=0.131,<1.0
+cryptography>=42.0,<46.0

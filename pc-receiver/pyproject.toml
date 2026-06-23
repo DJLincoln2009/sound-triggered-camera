@@ -1,0 +1,33 @@
+[project]
+name = "soundcam-receiver"
+version = "1.0.0"
+description = "Application de réception PC pour la caméra à déclenchement sonore et manuel (architecture 100% locale)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "flask-sock>=0.7,<0.8",
+    "simple-websocket>=1.0,<2.0",
+    "zeroconf>=0.131,<1.0",
+    "cryptography>=42.0,<46.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pyinstaller>=6.0"]
+
+[project.scripts]
+soundcam-receiver = "receiver.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["receiver"]
+
+[tool.setuptools.package-data]
+receiver = ["web/templates/*.html", "web/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

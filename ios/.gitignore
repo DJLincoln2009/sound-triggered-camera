@@ -1,0 +1,12 @@
+# Projet généré par XcodeGen
+SoundCam.xcodeproj/
+# Info.plist généré à partir de project.yml
+SoundCam/App/Info.plist
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+*.ipa
